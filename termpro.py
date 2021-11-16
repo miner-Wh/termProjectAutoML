@@ -51,7 +51,6 @@ def myPreprocess1(dataset, num_process, cat_process):
     X_cats = dataset.select_dtypes(np.object).copy()
     X_nums = dataset.select_dtypes(exclude=np.object).copy()
 
-
     if num_process == 'standard':
         scaler = preprocessing.StandardScaler()
     elif num_process == 'minmax':
