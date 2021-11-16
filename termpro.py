@@ -46,46 +46,6 @@ from sklearn.metrics import *
 import warnings
 warnings.filterwarnings('ignore')
 
-# ################
-# # 사용 가능 스케일러  'standard','minmax','maxabs','robust'
-# # 사용 가능 인코더 'onehot', ordinal'
-# def myPreprocess(train, test, num_process, cat_process):
-#     # 카테고리 와 넘버릭 분류
-#     X_cats = train.select_dtypes(np.object).copy()
-#     X_nums = train.select_dtypes(exclude=np.object).copy()
-#
-#     X_cats_t = test.select_dtypes(np.object).copy()
-#     X_nums_t = test.select_dtypes(exclude=np.object).copy()
-#
-#     if num_process == 'standard':
-#         scaler = preprocessing.StandardScaler()
-#     elif num_process == 'minmax':
-#         scaler = preprocessing.MinMaxScaler()
-#     elif num_process == 'maxabs':
-#         scaler = preprocessing.MaxAbsScaler()
-#     elif num_process == 'robust':
-#         scaler = preprocessing.RobustScaler()
-#     else:
-#         raise ValueError("Supported 'num_process' : 'standard','minmax','maxabs','robust'")
-#     if cat_process == 'onehot':
-#         encoder = preprocessing.OneHotEncoder(sparse=False, handle_unknown='ignore')
-#     elif cat_process == 'ordinal':
-#         encoder = preprocessing.OrdinalEncoder()
-#     else:
-#         raise ValueError("Supported 'cat_process' : 'onehot', ordinal'")
-#
-#     X_nums = scaler.fit_transform(X_nums)
-#     X_cats = encoder.fit_transform(X_cats)
-#
-#     X_nums_t = scaler.transform(X_nums_t)
-#     X_cats_t = encoder.transform(X_cats_t)
-#
-#     train_processed = np.concatenate([X_nums, X_cats], 1)
-#     test_processed = np.concatenate([X_nums_t, X_cats_t], 1)
-#
-#     return train_processed, test_processed
-
-
 def myPreprocess1(dataset, num_process, cat_process):
     # 카테고리 와 넘버릭 분류
     X_cats = dataset.select_dtypes(np.object).copy()
