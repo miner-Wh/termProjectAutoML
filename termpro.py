@@ -1,3 +1,4 @@
+
 from sklearn.model_selection import train_test_split
 import pandas as pd
 import numpy as np
@@ -35,7 +36,6 @@ from sklearn.cluster import KMeans
 from sklearn.cluster import DBSCAN
 from sklearn.cluster import MeanShift
 from sklearn.cluster import estimate_bandwidth
-# from pyclustering.cluster.clarans import clarans;
 from sklearn.mixture import GaussianMixture
 
 from sklearn.metrics import silhouette_score
@@ -44,7 +44,13 @@ from sklearn.model_selection import GridSearchCV
 from sklearn import metrics
 from sklearn.metrics import *
 import warnings
+
 warnings.filterwarnings('ignore')
+
+
+# # 사용 가능 스케일러  'standard','minmax','maxabs','robust'
+# # 사용 가능 인코더 'onehot', ordinal'
+
 
 def myPreprocess1(dataset, num_process, cat_process):
     # 카테고리 와 넘버릭 분류
@@ -112,6 +118,65 @@ def show_cmatrix(ytest, pred):
     plt.show()
 
 
+def clustering_plot(df, model_name, model, param, labels, cluster, score):
+    print('[', model_name, ']')
+
+    if model_name == 'K_Means':
+        cluster_id = pd.DataFrame(cluster.labels_)
+        d1 = pd.concat([df, cluster_id], axis=1)
+        d1.columns = [0, 1, "cluster"]
+        sns.scatterplot(d1[0], d1[1], hue=d1['cluster'], legend="full")
+        sns.scatterplot(model.cluster_centers_[:, 0], model.cluster_centers_[:, 1], label='Centroids')
+        plt.title("KMeans Clustering with k = {}".format(param))
+        plt.legend()
+        plt.show()
+
+        print('K = ', param)
+
+    elif model_name == 'GMM':
+        frame = pd.DataFrame(df)
+        frame['cluster'] = labels
+        frame.columns = [df.columns[0], df.columns[1], 'cluster']
+
+        plt.title('GMM with K = {}'.format(param))
+        for i in range(0, param + 1):
+            data = frame[frame["cluster"] == i]
+            plt.scatter(data[data.columns[0]], data[data.columns[1]])
+        plt.show()
+        print("K = ", param)
+
+    elif model_name == 'DBSCAN':
+        cluster_id = pd.DataFrame(cluster.labels_)
+
+        d2 = pd.DataFrame()
+        d2 = pd.concat([df, cluster_id], axis=1)
+        d2.columns = [0, 1, "cluster"]
+        sns.scatterplot(d2[0], d2[1], hue=d2['cluster'], legend="full")
+        plt.title('DBSCAN with eps = {}, min_samples = {}'.format(param['eps'], param['min_samples']))
+        plt.show()
+
+        labels = d2['cluster']
+        print('eps = {}, min_samples = {}'.format(param['eps'], param['min_samples']))
+
+
+    elif model_name == 'MeanShift':
+        cluster_id = pd.DataFrame(cluster.labels_)
+
+        d6 = pd.DataFrame()
+        d6 = pd.concat([df, cluster_id], axis=1)
+        d6.columns = [0, 1, "cluster"]
+
+        sns.scatterplot(d6[0], d6[1], hue=d6['cluster'], legend="full")
+        plt.title('Mean Shift with {} samples'.format(param))
+        plt.show()
+
+        print('n_samples(estimate_bandwidth) = {}'.format(param))
+
+    print('Silhouette Score(euclidean):', metrics.silhouette_score(df, labels, metric='euclidean'))
+    print('Silhouette Score(manhattan):', metrics.silhouette_score(df, labels, metric='manhattan'))
+    print('Purity_score:', score)
+
+
 def show_RocCurve(model, pred_X_test, Y_test):
     plot = plot_roc_curve(model, pred_X_test, Y_test)
     plt.show()
@@ -129,18 +194,122 @@ def initial_tuning(model, hyperparameters, X_train_val, Y_train_val):
     return result
 
 
-def tuning(initial_result,model_name, model, X_train_val, Y_train_val):
+def initial_tuning_2(df, y, model_name, hyperparams):
+    # Apply various hyperparameters in each models
+    print('-------------------------------')
+    print('Start Initial Tuning')
+    print('-------------------------------')
+    _1st_param = 0
+    _2nd_param = 0
+    _1st_score = 0
+    _2nd_score = 0
+    init_best_model = ''
+
+    if model_name == 'K_Means':
+        distortions = []
+        for k in hyperparams['k']:
+            kmeans = KMeans(n_clusters=k, init='k-means++')
+            cluster = kmeans.fit(df)
+            labels = kmeans.predict(df)
+            score = purity_score(y, labels)
+            print('(K=', k, ') Purity_score:', score)
+            if score >= _1st_score:
+                _2nd_param = _1st_param
+                _2nd_score = _1st_score
+                _1st_score = score
+                _1st_param = k
+                init_best_model = kmeans
+
+            elif score >= _2nd_score:
+                _2nd_score = score
+                _2nd_param = k
+
+
+    elif model_name == 'GMM':
+        for k in hyperparams['k']:
+            gmm = GaussianMixture(n_components=k)
+            gmm.fit(df)
+            labels = gmm.predict(df)
+            score = purity_score(y, labels)
+            print('(K=', k, ') Purity_score:', score)
+            if score >= _1st_score:
+                _2nd_param = _1st_param
+                _2nd_score = _1st_score
+                _1st_score = score
+                _1st_param = k
+                init_best_model = gmm
+
+            elif score >= _2nd_score:
+                _2nd_score = score
+                _2nd_param = k
+
+
+    elif model_name == 'DBSCAN':
+        eps = hyperparams['DBSCAN_params']['eps']
+        minsam = hyperparams['DBSCAN_params']['min_samples']
+
+        for i in eps:
+            for j in minsam:
+                db = DBSCAN(eps=i, min_samples=j)
+                cluster = db.fit(df)
+                cluster_id = pd.DataFrame(cluster.labels_)
+
+                d2 = pd.DataFrame()
+                d2 = pd.concat([df, cluster_id], axis=1)
+                d2.columns = [0, 1, "cluster"]
+                score = purity_score(y, d2['cluster'])
+                print('(eps = ', i, ' min_samples =', j, ') Purity_score:', score)
+
+                if score >= _1st_score:
+                    _2nd_param = _1st_param
+                    _2nd_score = _1st_score
+                    _1st_score = score
+                    _1st_param = {'eps': i, 'min_samples': j}
+                    init_best_model = db
+
+                elif score >= _2nd_score:
+                    _2nd_score = score
+                    _2nd_param = {'eps': i, 'min_samples': j}
+
+
+    elif model_name == 'MeanShift':
+        n = hyperparams['MeanShift_params']['n']
+        for i in n:
+            bandwidth = estimate_bandwidth(df, quantile=0.2, n_samples=i)
+            ms = MeanShift(bandwidth=bandwidth)
+            cluster = ms.fit(df)
+            cluster_id = pd.DataFrame(cluster.labels_)
+
+            d6 = pd.DataFrame()
+            d6 = pd.concat([df, cluster_id], axis=1)
+            d6.columns = [0, 1, "cluster"]
+            score = purity_score(y, d6['cluster'])
+
+            print('(n_samples =', i, ') Purity_score:', score)
+
+            if score >= _1st_score:
+                _2nd_param = _1st_param
+                _2nd_score = _1st_score
+                _1st_score = score
+                _1st_param = i
+                init_best_model = ms
+
+            elif score >= _2nd_score:
+                _2nd_score = score
+                _2nd_param = i
+
+    return _1st_param, _1st_score, _2nd_param, _2nd_score, init_best_model
+
+
+def tuning(initial_result, model_name, model, X_train_val, Y_train_val):
     _1st_param = initial_result.iloc[0, 0]
     _2nd_param = initial_result.iloc[1, 0]
     _1st_score = initial_result.iloc[0, 1]
     _2nd_score = initial_result.iloc[1, 1]
-    # _1st_param = 10
-    # _2nd_param = 100
-    # _1st_score = 0
-    # _2nd_score = 0
 
     # Split to validation dataset and train
-    X_train, X_val, y_train, y_val = train_test_split(X_train_val, Y_train_val, test_size=0.25,shuffle=True,random_state=100)
+    X_train, X_val, y_train, y_val = train_test_split(X_train_val, Y_train_val, test_size=0.25, shuffle=True,
+                                                      random_state=100)
 
     best_score = 0
     best_param = -1
@@ -171,10 +340,9 @@ def tuning(initial_result,model_name, model, X_train_val, Y_train_val):
         # indexes = [0, -1]
         # hyperparameters = np.delete(hyperparameters, indexes)
 
-
         for i in range(len(hyperparameters)):
             param = hyperparameters[i]
-            if param-best_param==0 or param-second_param==0:
+            if param - best_param == 0 or param - second_param == 0:
                 continue
             if model_name == 'Decision Tree':
                 model.max_depth = param
@@ -182,11 +350,11 @@ def tuning(initial_result,model_name, model, X_train_val, Y_train_val):
                 model.C = param
 
             model = model.fit(X_train, y_train)
-            #print(model)
+            # print(model)
 
             score = model.score(X_val, y_val)
 
-            #print(score)
+            # print(score)
             if score >= best_score:
                 second_score = best_score
                 second_param = best_param
@@ -206,7 +374,7 @@ def tuning(initial_result,model_name, model, X_train_val, Y_train_val):
         print('second_param:', second_param)
         print('---------------------------------------')
 
-        if k!=1 and (best_score - _1st_score) / _1st_score <= eps:
+        if k != 1 and (best_score - _1st_score) / _1st_score <= eps:
             break
 
         _1st_param = best_param
@@ -219,47 +387,217 @@ def tuning(initial_result,model_name, model, X_train_val, Y_train_val):
     return best_score, best_model
 
 
-def autoML(models):
+def tuning2(df, y, model, model_name, _1st_score, _1st_param, _2nd_score, _2nd_param):
+    best_score = 0
+    best_param = -1
+    second_score = 0
+    second_param = -1
+    best_labels = 0
+    best_model = model
+    best_cluster = ''
+    hyperparameters = ''
+
+    number = 20
+    interval = 4
+
+    train_eps = 0.0001
+    iter = 0
+    print('-------------------------------')
+    print('Start Tuning ')
+    print('-------------------------------')
+    # print('model_name : ',model_name)
+    print()
+
+    while True:
+        iter = iter + 1
+
+        if model_name == 'DBSCAN':
+
+            if _1st_param['min_samples'] - _2nd_param['min_samples'] < 0:
+                hyperparameters_min_samples = np.arange(_1st_param['min_samples'], _2nd_param['min_samples'] + 1,
+                                                        interval)
+                hyperparameters_min_samples = list(map(int, hyperparameters_min_samples))
+            else:
+                hyperparameters_min_samples = np.arange(_2nd_param['min_samples'], _1st_param['min_samples'] + 1,
+                                                        interval)
+                hyperparameters_min_samples = list(map(int, hyperparameters_min_samples))
+
+            if _1st_param['eps'] - _2nd_param['eps'] < 0:
+                hyperparameters_eps = np.linspace(_2nd_param['eps'], _1st_param['eps'], num=number)
+            else:
+                hyperparameters_eps = np.linspace(_2nd_param['eps'], _1st_param['eps'], num=number)
+
+            hyperparameters = dict(eps=hyperparameters_eps, min_samples=hyperparameters_min_samples)
+
+            for i in range(len(hyperparameters_min_samples)):
+                min_samples = hyperparameters_min_samples[i]
+                model.min_samples = min_samples
+
+                for j in range(len(hyperparameters_eps)):
+                    eps = hyperparameters_eps[j]
+                    model.eps = eps
+
+                    param = {'eps': eps, 'min_samples': min_samples}
+
+                    if best_param != -1:
+                        if param['eps'] - best_param['eps'] == 0 and param['min_samples'] == best_param['min_samples']:
+                            continue
+                    if second_param != -1:
+                        if param['eps'] == second_param['eps'] and param['min_samples'] == second_param['min_samples']:
+                            continue
+
+                    cluster = model.fit(df)
+                    cluster_id = pd.DataFrame(cluster.labels_)
+                    d2 = pd.DataFrame()
+                    d2 = pd.concat([df, cluster_id], axis=1)
+                    d2.columns = [0, 1, "cluster"]
+
+                    score = purity_score(y, d2['cluster'])
+
+                    if score >= best_score:
+                        second_score = best_score
+                        second_param = best_param
+                        best_score = score
+                        best_param = param
+                        best_model = model
+                        best_cluster = cluster
+
+
+                    elif score >= second_score:
+                        second_score = score
+                        second_param = param
+
+
+
+        else:
+
+            if _1st_param - _2nd_param < 0:
+                hyperparameters = np.arange(_1st_param, _2nd_param + 1, interval)
+            else:
+                hyperparameters = np.arange(_2nd_param, _1st_param + 1, interval)
+
+            hyperparameters = list(map(int, hyperparameters))
+            print("Iteration ", iter)
+            print('hyperparameters:', hyperparameters)
+
+            for i in range(len(hyperparameters)):
+                param = hyperparameters[i]
+                if param - best_param == 0 or param - second_param == 0:
+                    continue
+                if model_name == 'K_Means':
+                    model.n_cluster = param
+                elif model_name == 'GMM':
+                    model.n_components = param
+                elif model_name == 'MeanShift':
+                    bandwidth = estimate_bandwidth(df, quantile=0.2, n_samples=param)
+                    model.bandwidth = bandwidth
+                else:
+                    model.C = param
+
+                cluster = model.fit(df)
+                labels = model.predict(df)
+                score = purity_score(y, labels)
+
+                if score >= best_score:
+                    second_score = best_score
+                    second_param = best_param
+                    best_score = score
+                    best_param = param
+                    best_model = model
+                    best_labels = labels
+                    best_cluster = cluster
+
+
+                elif score >= second_score:
+                    second_score = score
+                    second_param = param
+
+        print('\nbest_score:', best_score)
+        print('best_param:', best_param)
+        print('second_score:', second_score)
+        print('second_param:', second_param)
+        print('---------------------------------------')
+
+        if iter != 1 and (best_score - _1st_score) / _1st_score <= train_eps:
+            break
+
+        _1st_param = best_param
+        _1st_score = best_score
+        _2nd_param = second_param
+        _2nd_score = second_score
+        interval = interval / 2
+
+    return best_score, best_param, best_model, best_labels, best_cluster
+
+
+def autoML(models, supervised, hyperparams,dataset,Y):
     hyperparameters = ''
     model = ''
     model_name = ''
-    for i in range(len(models)):
-        model_name = models[i]
-        if model_name == 'Logistic Regression':
-            # c
-            hyperparameters = dict(C=[0.01, 0.1, 1, 10, 100])
-            model = LogisticRegression(solver='liblinear', random_state=100)
+
+    if supervised == 'classification':
+        for i in range(len(models)):
+            X_train_val, X_test, Y_train_val, Y_test = train_test_split(dataset, Y, test_size=0.3, shuffle=True,
+                                                                        stratify=Y,
+                                                                        random_state=34)
+            model_name = models[i]
+            if model_name == 'Logistic Regression':
+                # c
+                hyperparameters = hyperparams['LR_params']
+                model = LogisticRegression(solver='liblinear', random_state=100)
 
 
-        elif model_name == 'Decision Tree':
-            # max_Depth
-            hyperparameters = dict(max_depth=[2, 10, 100])
-            model = DecisionTreeClassifier(random_state=100)
+            elif model_name == 'Decision Tree':
+                # max_Depth
+                hyperparameters = hyperparams['DT_params']
+                model = DecisionTreeClassifier(random_state=100)
 
-        elif model_name == 'SVM':
-            # c
-            hyperparameters = dict(C=[0.01, 0.1, 1, 10, 100])
-            model = SVC(kernel='linear', random_state=100)
+            elif model_name == 'SVM':
+                # c
+                hyperparameters = hyperparams['SVM_params']
+                model = SVC(kernel='linear', random_state=100)
 
-        result = initial_tuning(model, hyperparameters, X_train_val, Y_train_val)
-        print(result)
+            result = initial_tuning(model, hyperparameters, X_train_val, Y_train_val)
+            print(result)
 
-        best_score, best_model = tuning(result,model_name, model, X_train_val, Y_train_val)
+            best_score, best_model = tuning(result, model_name, model, X_train_val, Y_train_val)
 
-        y_pred = best_model.predict(X_test)
+            y_pred = best_model.predict(X_test)
 
+            eval_classification(model_name, model, y_pred, Y_test)
 
-        eval_classification(model_name, model, y_pred, Y_test)
+            print('Train score: ' + str(best_model.score(X_train_val, Y_train_val)))  # accuracy
+            print('Test score:' + str(best_model.score(X_test, Y_test)))  # accuracy
 
-        print('Train score: ' + str(best_model.score(X_train_val, Y_train_val)))  # accuracy
-        print('Test score:' + str(best_model.score(X_test, Y_test)))  # accuracy
-
-        show_cmatrix(Y_test, y_pred)
-
-        show_RocCurve(best_model, X_test, Y_test)
+            show_cmatrix(Y_test, y_pred)
+            show_RocCurve(best_model, X_test, Y_test)
 
 
+    elif supervised == 'clustering':
+        # PCA
+        pca = PCA(n_components=2)
+        reduced_df = pca.fit_transform(dataset)
+        df = pd.DataFrame(reduced_df)
+        y=Y
 
+        for i in range(len(models)):
+            model_name = models[i]
+            print('\nModel name:', model_name)
+
+            _1st_param, _1st_score, _2nd_param, _2nd_score, init_best_model = initial_tuning_2(df, y, model_name,
+                                                                                               hyperparams)
+
+            print('Initial Best Hyperparameters:', _1st_param, ' Score:', _1st_score)
+            print('Initial Second Hyperparameters:', _2nd_param, ' Score:', _2nd_score)
+
+            best_score, best_param, best_model, best_labels, best_cluster = tuning2(df, y, init_best_model, model_name,
+                                                                                    _1st_score, _1st_param, _2nd_score,
+                                                                                    _2nd_param)
+
+            print('---------------------------------------')
+            print('\nBest Result')
+            print('---------------------------------------')
+            clustering_plot(df, model_name, best_model, best_param, best_labels, best_cluster, best_score)
 
 
 def elbow_curve(distortions):
@@ -277,131 +615,12 @@ def purity_score(y_true, y_pred):
     return np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
 
 
-def clustering(df,y, models, hyperparams):
-
-    # Experiment with various models
-    for model in models:
-        print("Current model: ", model)
-        # Apply various hyperparameters in each models
-        if model == 'K_Means':
-            distortions = []
-            for k in hyperparams['k']:
-                kmeans = KMeans(n_clusters=k, init='k-means++')
-                cluster = kmeans.fit(df)
-                labels = kmeans.predict(df)
-                cluster_id = pd.DataFrame(cluster.labels_)
-                distortions.append(kmeans.inertia_)
-
-                d1 = pd.concat([df, cluster_id], axis=1)
-                #print(d1)
-
-                d1.columns = [0, 1, "cluster"]
-
-                sns.scatterplot(d1[0], d1[1], hue=d1['cluster'], legend="full")
-                sns.scatterplot(kmeans.cluster_centers_[:, 0], kmeans.cluster_centers_[:, 1], label='Centroids')
-                plt.title("KMeans Clustering with k = {}".format(k))
-                plt.legend()
-                plt.show()
-
-                print('Silhouette Score(euclidean):', metrics.silhouette_score(df, labels, metric='euclidean'), " (", k,
-                      "-clusters)")
-                print('Silhouette Score(manhattan):', metrics.silhouette_score(df, labels, metric='manhattan'))
-
-                print('Quantile comparison score(purity_score):', purity_score(y, labels))
-
-            elbow_curve(distortions)
-
-
-
-        elif model == 'GMM':
-            for k in hyperparams['k']:
-                gmm = GaussianMixture(n_components=k)
-                gmm.fit(df)
-                labels = gmm.predict(df)
-
-                frame = pd.DataFrame(df)
-                frame['cluster'] = labels
-                frame.columns = [df.columns[0], df.columns[1], 'cluster']
-
-                plt.title('GMM with K = {}'.format(k))
-                for i in range(0, k + 1):
-                    data = frame[frame["cluster"] == i]
-                    plt.scatter(data[data.columns[0]], data[data.columns[1]])
-                plt.show()
-
-                print('Silhouette Score(euclidean):', metrics.silhouette_score(df, labels, metric='euclidean'), " (", k,
-                      "-components)")
-                print('Silhouette Score(manhattan):', metrics.silhouette_score(df, labels, metric='manhattan'))
-
-                print('Quantile comparison score(purity_score):', purity_score(y, labels))
-
-
-        elif model == 'DBSCAN':
-            eps = hyperparams['DBSCAN_params']['eps']
-            minsam = hyperparams['DBSCAN_params']['min_samples']
-
-            for i in eps:
-                for j in minsam:
-                    db = DBSCAN(eps=i, min_samples=j)
-                    cluster = db.fit(df)
-                    cluster_id = pd.DataFrame(cluster.labels_)
-
-                    d2 = pd.DataFrame()
-                    d2 = pd.concat([df, cluster_id], axis=1)
-                    d2.columns = [0, 1, "cluster"]
-
-                    sns.scatterplot(d2[0], d2[1], hue=d2['cluster'], legend="full")
-                    plt.title('DBSCAN with eps = {}, min_samples = {}'.format(i,j))
-                    plt.show()
-
-
-                    print('Silhouette Score(euclidean):',
-                          metrics.silhouette_score(d2.iloc[:, :-1], d2['cluster'], metric='euclidean'), " (eps=", i,
-                          ")", " (min_samples=", j, ")")
-                    print('Silhouette Score(manhattan):',
-                          metrics.silhouette_score(d2.iloc[:, :-1], d2['cluster'], metric='manhattan'))
-
-                    print('Quantile comparison score(purity_score):', purity_score(y, d2['cluster']))
-
-
-
-        elif model == 'MeanShift':
-            n = hyperparams['MeanShift_params']['n']
-            for i in n:
-                bandwidth = estimate_bandwidth(df, quantile=0.2, n_samples=i)
-                ms = MeanShift(bandwidth=bandwidth)
-                cluster = ms.fit(df)
-                cluster_id = pd.DataFrame(cluster.labels_)
-
-                d6 = pd.DataFrame()
-                d6 = pd.concat([df, cluster_id], axis=1)
-                d6.columns = [0, 1, "cluster"]
-
-                sns.scatterplot(d6[0], d6[1], hue=d6['cluster'], legend="full")
-                plt.title('Mean Shift with {} samples'.format(i))
-                plt.show()
-
-                print('n_samples(estimate_bandwidth) = {}'.format(i))
-
-                print('Silhouette Coefficient(euclidean): ',
-                      metrics.silhouette_score(d6.iloc[:, :-1], d6['cluster'], metric='euclidean'))
-                print('Silhouette Coefficient(manhattan): ',
-                      metrics.silhouette_score(d6.iloc[:, :-1], d6['cluster'], metric='manhattan'))
-
-                print('Quantile comparison score(purity_score):', purity_score(y, d6['cluster']))
-
-
-
-
-
-
 ################
 # 데이터셑 불러 오기
-df_original = pd.read_csv('C:/Users/Howoon/Downloads/archive (18)/hotel_booking.csv', encoding='utf-8')
-
+df_original = pd.read_csv('/content/drive/MyDrive/hotel_booking.csv', encoding='utf-8')
 
 # 결측치 확인
-print("Check dirty data : \n" + str(df_original.isna().sum()))
+# print("Check dirty data : \n" + str(df_original.isna().sum()))
 
 # 오리지널 카피 for 클린 데이터
 df_clean = df_original.copy()
@@ -418,21 +637,21 @@ df_clean['company'] = df_clean['company'].fillna(0)
 df_clean = df_clean.dropna(axis=0)
 
 # 결측치 확인
-print("Check dirty data : \n" + str(df_clean.isna().sum()))
+# print("Check dirty data : \n" + str(df_clean.isna().sum()))
 ################################
 
 ################################ data type setting
-print(df_clean.dtypes)
+# print(df_clean.dtypes)
 
 # 카테고리컬 인데 넘버리컬로 된거 변환
 df_clean = df_clean.astype({'agent': 'object', 'company': 'object', 'is_repeated_guest': 'object'})
 
-print(df_clean.dtypes)
+# print(df_clean.dtypes)
 ################################
 
 
 # # # ######SVC sampling###############
-df_clean=df_clean.sample(frac=0.5,random_state=1)
+df_clean = df_clean.sample(frac=0.5, random_state=1)
 # #
 # print(df_clean.shape)
 
@@ -461,37 +680,35 @@ X_r = df_clean[
 
 Y = df_clean['is_canceled']
 
+new_dataset = myPreprocess1(X_c1, 'standard', 'ordinal')
 
 
-new_dataset=myPreprocess1(X_c1,'standard', 'ordinal')
-X_train_val, X_test, Y_train_val, Y_test = train_test_split(new_dataset, Y, test_size=0.3, shuffle=True, stratify=Y, random_state=34)
+classification_models = ['Logistic Regression', 'Decision Tree', 'SVM']
 
 
-classification_models = ['Logistic Regression','Decision Tree','SVM']
-clustering_models = [ 'K_Means','DBSCAN','MeanShift','GMM']
+classification_hyperparams = {
 
+    'LR_params': dict(C=[0.01, 0.1, 1, 10, 100]),
+    'DT_params': dict(max_depth=[2, 10, 100]),
+    'SVM_params': dict(C=[0.01, 0.1, 1, 10, 100])
 
-autoML(classification_models)
+}
 
-
+clustering_models = ['K_Means', 'DBSCAN', 'MeanShift', 'GMM']
 
 clustering_hyperparams = {
 
     'DBSCAN_params': {
-        'eps': [1,2],
-        'min_samples': [5,10,50]
+        'eps': [0.0001, 0.001, 0.01, 0.1, 1, 10],
+        'min_samples': [10, 50, 100]
         # 'eps':[0.1, 0.2, 0.3, 0.4, 0.5]
     },
     'MeanShift_params': {
-        'n': [20,25,15]
+        'n': [20, 50, 100]
     },
-    'k': range(2, 5)
+    'k': [2, 10, 100, 500]
 }
 
-y=Y
-pca = PCA(n_components=2)
-reduced_df = pca.fit_transform(new_dataset)
-reduced_df = pd.DataFrame(reduced_df)
-clustering(reduced_df,y, clustering_models, clustering_hyperparams)
-
+autoML(classification_models, 'classification', classification_hyperparams,new_dataset,Y)
+autoML(clustering_models, 'clustering', clustering_hyperparams,new_dataset,Y)
 
