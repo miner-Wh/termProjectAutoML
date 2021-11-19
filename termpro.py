@@ -97,7 +97,10 @@ def show_best_hyperparameter(model, hyperparameters):
     for key, value in hyperparameters.items():
         print('Best ' + key + ':', model.get_params()[key])
 
-
+# < show_cmatrix >
+# INPUT : ytest, pred
+# OUTPUT : Confusion Matrix
+# Plotting Confusion Matrix using ytest and predicted y value
 def show_cmatrix(ytest, pred):
     # Creating confusion matrix
     cm = confusion_matrix(ytest, pred)
@@ -176,7 +179,10 @@ def clustering_plot(df, model_name, model, param, labels, cluster, score):
     print('Silhouette Score(manhattan):', metrics.silhouette_score(df, labels, metric='manhattan'))
     print('Purity_score:', score)
 
-
+# < show_RocCurve >
+# INPUT : model, pres_X_test, Y_test
+# OUTPUT : Roc Curve
+# Plotting Roc Curve using 3 parameter ( Classification model, Predicted X test value, Predicted Y test value)
 def show_RocCurve(model, pred_X_test, Y_test):
     plot = plot_roc_curve(model, pred_X_test, Y_test)
     plt.show()
@@ -599,7 +605,10 @@ def autoML(models, supervised, hyperparams,dataset,Y):
             print('---------------------------------------')
             clustering_plot(df, model_name, best_model, best_param, best_labels, best_cluster, best_score)
 
-
+# < elbow_curve >
+# INPUT : distortions
+# OUTPUT : Elbow Curve
+# Plotting Elbow Curve using 1 parameter ( model )
 def elbow_curve(distortions):
     fig = plt.figure(figsize=(15, 5))
     plt.plot(range(2, 5), distortions)
@@ -607,7 +616,10 @@ def elbow_curve(distortions):
     plt.title('Elbow curve')
     plt.show()
 
-
+# < purity_score >
+# INPUT : y_true, y_pred
+# OUTPUT : purity score
+# Return purity score by using 2 parameters ( y_true, y_pred )
 def purity_score(y_true, y_pred):
     # compute contingency matrix (also called confusion matrix)
     contingency_matrix = metrics.cluster.contingency_matrix(y_true, y_pred)
